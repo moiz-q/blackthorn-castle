@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Blackthorn Castle</title>
+  <meta name="description" content="Blackthorn Castle — a web comic. Chapter 1, 45 pages.">
+  <meta name="theme-color" content="#0b0a0e">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Blackthorn Castle">
+  <meta property="og:description" content="A web comic. Chapter 1, 45 pages.">
+  <meta property="og:image" content="https://moiz-q.github.io/blackthorn-castle/assets/share.jpg">
+  <meta property="og:url" content="https://moiz-q.github.io/blackthorn-castle/">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="assets/icon.png">
+  <link rel="apple-touch-icon" href="assets/icon.png">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <header class="hero">
+    <img src="assets/cover.jpg" alt="Blackthorn Castle at night, under a violet moon">
+    <div class="hero-text">
+      <p class="eyebrow">Chapter 1</p>
+      <h1>Blackthorn Castle</h1>
+      <div class="actions">
+        <a class="btn primary" href="read.html#1">Start reading</a>
+        <a class="btn" id="resume" href="read.html#1" hidden>Continue from page 1</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="contents">
+    <h2 id="pages-heading">Pages</h2>
+    <ol class="grid" id="grid" aria-labelledby="pages-heading"></ol>
+  </main>
+
+  <footer>Blackthorn Castle · Chapter 1</footer>
+
+  <script src="assets/pages.js"></script>
+  <script>
+    (function () {
+      var pages = window.COMIC.pages;
+      var last = 0;
+      try { last = parseInt(localStorage.getItem("bc-page"), 10) || 0; } catch (e) {}
+
+      var grid = document.getElementById("grid");
+      var html = "";
+      pages.forEach(function (p) {
+        var nn = String(p.n).padStart(3, "0");
+        html += '<li><a href="read.html#' + p.n + '"' + (p.n === last ? ' class="here"' : "") +
+          ' aria-label="Page ' + p.n + '"><img src="pages/thumb/' + nn + '.jpg" alt="" loading="lazy" decoding="async" width="360" height="240"><span>' +
+          p.n + "</span></a></li>";
+      });
+      grid.innerHTML = html;
+
+      if (last > 1 && last <= pages.length) {
+        var r = document.getElementById("resume");
+        r.href = "read.html#" + last;
+        r.textContent = "Continue from page " + last;
+        r.hidden = false;
+      }
+    })();
+  </script>
+</body>
+</html>
