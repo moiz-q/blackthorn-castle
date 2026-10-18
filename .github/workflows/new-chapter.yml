@@ -1,0 +1,100 @@
+# Turns a "New chapter" issue into a chapter of the comic.
+#
+# Opening (or editing) the issue builds the pages on a branch, opens a pull
+# request and replies on the issue with every page, numbered. The owner's and
+# collaborators' chapters are merged and go live straight away; anyone else's
+# go live when the owner merges the pull request (see chapter-published.yml).
+
+name: New chapter
+
+on:
+  issues:
+    types: [opened, edited]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  pages: write
+
+concurrency:
+  group: new-chapter-${{ github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    if: github.event.issue.state == 'open' && contains(github.event.issue.labels.*.name, 'new chapter')
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      ISSUE: ${{ github.event.issue.number }}
+      AUTHOR: ${{ github.event.issue.user.login }}
+      AUTHOR_ROLE: ${{ github.event.issue.author_association }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install pillow numpy
+
+      - name: Build the pages
+        id: build
+        env:
+          ISSUE_BODY: ${{ github.event.issue.body }}
+        run: python tools/chapter_from_issue.py
+
+      - name: Say what needs fixing
+        if: steps.build.outputs.ok != 'true'
+        run: gh issue comment "$ISSUE" --repo "$REPO" --body-file "$RUNNER_TEMP/reply.md"
+
+      - name: Commit the chapter and open a pull request
+        if: steps.build.outputs.ok == 'true'
+        id: pr
+        env:
+          CHAPTER: ${{ steps.build.outputs.chapter }}
+          PAGES: ${{ steps.build.outputs.pages }}
+        run: |
+          branch="chapter-$CHAPTER-issue-$ISSUE"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          git add -A chapters assets/comic.js
+          git commit -q -m "Chapter $CHAPTER ($PAGES pages) from #$ISSUE by @$AUTHOR"
+          git push -q --force origin "$branch"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+          url=$(gh pr list --repo "$REPO" --head "$branch" --state open --json url --jq '.[0].url')
+          if [ -z "$url" ]; then
+            url=$(gh pr create --repo "$REPO" --head "$branch" --base "${{ github.event.repository.default_branch }}" \
+              --title "Chapter $CHAPTER from @$AUTHOR" \
+              --body "Chapter $CHAPTER, $PAGES pages, sent in #$ISSUE. Merging this puts it live.")
+          fi
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          sed -i "s/{SHA}/$(git rev-parse HEAD)/g" "$RUNNER_TEMP/reply.md"
+
+      - name: Publish (owner and collaborators)
+        if: steps.build.outputs.ok == 'true' && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association)
+        env:
+          CHAPTER: ${{ steps.build.outputs.chapter }}
+          PR: ${{ steps.pr.outputs.url }}
+        run: |
+          gh pr merge "$PR" --repo "$REPO" --merge --delete-branch
+          gh api -X POST "repos/$REPO/pages/builds" > /dev/null || true
+          site=$(gh api "repos/$REPO/pages" --jq .html_url)
+          if [ "$CHAPTER" = 1 ]; then link="${site}read.html#1"; else link="${site}read.html#$CHAPTER/1"; fi
+          printf '\n**Published.** It will be live in a minute or two: %s\n' "$link" >> "$RUNNER_TEMP/reply.md"
+          gh issue comment "$ISSUE" --repo "$REPO" --body-file "$RUNNER_TEMP/reply.md"
+          gh issue close "$ISSUE" --repo "$REPO" --reason completed
+
+      - name: Ask for approval (everyone else)
+        if: steps.build.outputs.ok == 'true' && !contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association)
+        env:
+          PR: ${{ steps.pr.outputs.url }}
+        run: |
+          printf '\nIt goes live once the comic'"'"'s owner approves it: %s\n' "$PR" >> "$RUNNER_TEMP/reply.md"
+          gh issue comment "$ISSUE" --repo "$REPO" --body-file "$RUNNER_TEMP/reply.md"

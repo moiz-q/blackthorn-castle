@@ -4,11 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Blackthorn Castle</title>
-  <meta name="description" content="Read Blackthorn Castle, Chapter 1.">
+  <meta name="description" content="Read Blackthorn Castle, a web comic.">
   <meta name="theme-color" content="#0b0a0e">
   <meta property="og:type" content="website">
   <meta property="og:title" content="Blackthorn Castle">
-  <meta property="og:description" content="A web comic. Chapter 1, 45 pages.">
+  <meta property="og:description" content="A web comic.">
   <meta property="og:image" content="https://moiz-q.github.io/blackthorn-castle/assets/share.jpg">
   <meta property="og:url" content="https://moiz-q.github.io/blackthorn-castle/">
   <meta name="twitter:card" content="summary_large_image">
@@ -22,7 +22,7 @@
       <a class="icon-btn" href="./" aria-label="Back to the cover">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
       </a>
-      <div class="title">Blackthorn Castle<small>Chapter 1</small></div>
+      <div class="title">Blackthorn Castle<small id="chapterLabel">Chapter 1</small></div>
       <span class="hint">← → to turn · click to zoom</span>
     </header>
 
@@ -35,10 +35,11 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
       </button>
       <section class="end" id="end" hidden>
-        <p>Blackthorn Castle</p>
-        <h2>End of Chapter 1</h2>
+        <p id="endKicker">Blackthorn Castle</p>
+        <h2 id="endTitle">End of Chapter 1</h2>
+        <p id="endBy" hidden></p>
         <div class="actions">
-          <a class="btn primary" href="#1">Read from the start</a>
+          <a class="btn primary" id="endPrimary" href="#1">Read from the start</a>
           <a class="btn" href="./">Back to the cover</a>
         </div>
       </section>
@@ -65,7 +66,7 @@
     <img id="zoomImg" alt="">
   </div>
 
-  <script src="assets/pages.js"></script>
+  <script src="assets/comic.js"></script>
   <script src="assets/reader.js"></script>
 </body>
 </html>

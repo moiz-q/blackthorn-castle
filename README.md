@@ -1,23 +1,30 @@
 # Blackthorn Castle
 
-A web comic. Chapter 1, 45 pages.
+A web comic.
 
 Read it at **https://moiz-q.github.io/blackthorn-castle/**
 
 ## Layout
 
-- `index.html` — cover and contents
-- `read.html` — the reader (`read.html#12` opens page 12)
-- `pages/large`, `pages/small`, `pages/thumb` — each page at 1536, 960 and 360 px wide
-- `assets/` — styles, reader script, page list, cover and share pictures
-- `tools/make_pages.py` — makes everything in `pages/` and `assets/pages.js` from the original page art
+- `index.html`: the cover and every chapter's pages
+- `read.html`: the reader (`read.html#12` is chapter 1, page 12; `read.html#2/5` is chapter 2, page 5)
+- `publish.html`: "Add a chapter", the page that sends people to the chapter form
+- `chapters/<n>/large`, `small`, `thumb`: each page at 1536, 960 and 360 px wide
+- `chapters/chapters.json`: the chapters, their titles, credits and page sizes (`assets/comic.js` is made from it)
+- `tools/make_pages.py`: builds a chapter from its page art
+- `tools/chapter_from_issue.py` and `.github/`: build a chapter from the "New chapter" form
 
-## Adding or replacing pages
+## Adding a chapter
 
-Put the original art in a folder as `1.png`, `2.png`, … and run:
+**Through the site:** anyone can use *Add a chapter* (`publish.html`). It opens a GitHub form
+where they attach their pages. A workflow builds the chapter, replies with every page numbered,
+and opens a pull request. Chapters from the owner and collaborators are merged and go live at
+once; anyone else's go live when the owner merges the pull request.
+
+**By hand:** put the pages in a folder as `1.png`, `2.png`, … and run
 
 ```
-python tools/make_pages.py "<that folder>"
+python tools/make_pages.py "<that folder>" --chapter 2 --title "The Cellar" --by "Name"
 ```
 
-Then commit and push; the site updates in a minute or two.
+then commit and push. The site updates a minute or two after a push.

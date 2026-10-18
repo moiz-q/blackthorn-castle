@@ -4,11 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Blackthorn Castle</title>
-  <meta name="description" content="Blackthorn Castle — a web comic. Chapter 1, 45 pages.">
+  <meta name="description" content="Blackthorn Castle, a web comic.">
   <meta name="theme-color" content="#0b0a0e">
   <meta property="og:type" content="website">
   <meta property="og:title" content="Blackthorn Castle">
-  <meta property="og:description" content="A web comic. Chapter 1, 45 pages.">
+  <meta property="og:description" content="A web comic.">
   <meta property="og:image" content="https://moiz-q.github.io/blackthorn-castle/assets/share.jpg">
   <meta property="og:url" content="https://moiz-q.github.io/blackthorn-castle/">
   <meta name="twitter:card" content="summary_large_image">
@@ -20,7 +20,7 @@
   <header class="hero">
     <img src="assets/cover.jpg" alt="Blackthorn Castle at night, under a violet moon">
     <div class="hero-text">
-      <p class="eyebrow">Chapter 1</p>
+      <p class="eyebrow" id="eyebrow">Chapter 1</p>
       <h1>Blackthorn Castle</h1>
       <div class="actions">
         <a class="btn primary" href="read.html#1">Start reading</a>
@@ -29,34 +29,53 @@
     </div>
   </header>
 
-  <main class="contents">
-    <h2 id="pages-heading">Pages</h2>
-    <ol class="grid" id="grid" aria-labelledby="pages-heading"></ol>
-  </main>
+  <main class="contents" id="contents"></main>
 
-  <footer>Blackthorn Castle · Chapter 1</footer>
+  <footer>
+    <span id="footerText">Blackthorn Castle</span>
+    <span aria-hidden="true">·</span>
+    <a href="publish.html">Add a chapter</a>
+  </footer>
 
-  <script src="assets/pages.js"></script>
+  <script src="assets/comic.js"></script>
   <script>
     (function () {
-      var pages = window.COMIC.pages;
-      var last = 0;
-      try { last = parseInt(localStorage.getItem("bc-page"), 10) || 0; } catch (e) {}
+      var COMIC = window.COMIC;
+      var chapters = COMIC.chapters;
+      var many = chapters.length > 1;
+      function esc(t) { return String(t).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+      function link(c, p) { return "read.html#" + (c === 1 ? p : c + "/" + p); }
 
-      var grid = document.getElementById("grid");
+      var at = "";
+      try { at = localStorage.getItem("bc-at") || ""; if (!at && localStorage.getItem("bc-page")) at = "#" + localStorage.getItem("bc-page"); } catch (e) {}
+      var m = at.match(/^#(?:(\d+)\/)?(\d+)$/);
+      var lastC = m ? parseInt(m[1] || "1", 10) : 0, lastP = m ? parseInt(m[2], 10) : 0;
+
       var html = "";
-      pages.forEach(function (p) {
-        var nn = String(p.n).padStart(3, "0");
-        html += '<li><a href="read.html#' + p.n + '"' + (p.n === last ? ' class="here"' : "") +
-          ' aria-label="Page ' + p.n + '"><img src="pages/thumb/' + nn + '.jpg" alt="" loading="lazy" decoding="async" width="360" height="240"><span>' +
-          p.n + "</span></a></li>";
+      chapters.forEach(function (ch) {
+        var id = "ch" + ch.n;
+        html += '<section class="chapter" id="' + id + '"><div class="chapter-head"><h2 id="' + id + '-h">' +
+          (many ? "Chapter " + ch.n : "Pages") + (ch.title ? ' <span class="chapter-title">' + esc(ch.title) + "</span>" : "") + "</h2>" +
+          (ch.by ? '<p class="credit">Pages by ' + esc(ch.by) + "</p>" : "") + "</div>" +
+          '<ol class="grid" aria-labelledby="' + id + '-h">';
+        ch.pages.forEach(function (pg, i) {
+          var p = i + 1, nn = String(p).padStart(3, "0");
+          html += '<li><a href="' + link(ch.n, p) + '"' + (ch.n === lastC && p === lastP ? ' class="here"' : "") +
+            ' aria-label="' + (many ? "Chapter " + ch.n + ", page " : "Page ") + p + '"><img src="chapters/' + ch.n + "/thumb/" + nn +
+            '.jpg" alt="" loading="lazy" decoding="async" width="360" height="240"><span>' + p + "</span></a></li>";
+        });
+        html += "</ol></section>";
       });
-      grid.innerHTML = html;
+      document.getElementById("contents").innerHTML = html;
 
-      if (last > 1 && last <= pages.length) {
+      var last = chapters[chapters.length - 1].n;
+      document.getElementById("eyebrow").textContent = many ? "Chapters 1–" + last : "Chapter 1";
+
+      var ch = chapters.filter(function (c) { return c.n === lastC; })[0];
+      if (ch && lastP >= 1 && lastP <= ch.pages.length && !(lastC === 1 && lastP === 1)) {
         var r = document.getElementById("resume");
-        r.href = "read.html#" + last;
-        r.textContent = "Continue from page " + last;
+        r.href = link(lastC, lastP);
+        r.textContent = many ? "Continue: Chapter " + lastC + ", page " + lastP : "Continue from page " + lastP;
         r.hidden = false;
       }
     })();

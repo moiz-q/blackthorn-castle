@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Add a Chapter · Blackthorn Castle</title>
+  <meta name="description" content="Send a new chapter of Blackthorn Castle and it is turned into web pages for you.">
+  <meta name="theme-color" content="#0b0a0e">
+  <link rel="icon" href="assets/icon.png">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <header class="bar top doc-bar">
+    <a class="icon-btn" href="./" aria-label="Back to the cover">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+    </a>
+    <div class="title">Blackthorn Castle</div>
+    <span></span>
+  </header>
+
+  <main class="doc">
+    <p class="eyebrow">Add a chapter</p>
+    <h1>Made the next chapter?</h1>
+    <p class="lead">Send your pages here and they're turned into the comic for you: same size and clean edges as the rest, with a place in the reader and on the cover.</p>
+
+    <ol class="steps">
+      <li>
+        <h2>Get your pages ready</h2>
+        <p>One image per page, in PNG, JPG or WebP. Name them by page number (<code>1.png</code>, <code>2.png</code>, <code>3.png</code> …) so the order is clear. Wide 3:2 pages, such as 1536×1024, match the rest of the comic. Each image must be under 10 MB.</p>
+      </li>
+      <li>
+        <h2>Check them here</h2>
+        <p>Pick all the pages at once. They stay on your device, and nothing is uploaded.</p>
+        <label class="btn pick">
+          <input type="file" id="files" accept="image/png,image/jpeg,image/webp" multiple>
+          Choose pages
+        </label>
+        <div id="report" class="report" hidden>
+          <p id="summary" class="summary"></p>
+          <ul id="problems" class="problems"></ul>
+          <ol id="preview" class="grid preview"></ol>
+        </div>
+      </li>
+      <li>
+        <h2>Send them</h2>
+        <p>The chapter form opens on GitHub, where the comic is kept. You'll need a free GitHub account. Fill in the chapter number, then drag your pages into the box <strong>in page order</strong>: 1 first, then 2, and so on.</p>
+        <p><a class="btn primary" id="formLink" href="https://github.com/moiz-q/blackthorn-castle/issues/new?template=new-chapter.yml" target="_blank" rel="noopener">Open the chapter form</a></p>
+      </li>
+      <li>
+        <h2>Check the result</h2>
+        <p>In a few minutes a reply shows every page, numbered, exactly as it will appear. If something's out of order, edit your post and the pages are rebuilt. Once the chapter is approved it goes live here.</p>
+      </li>
+    </ol>
+  </main>
+
+  <script>
+    (function () {
+      var input = document.getElementById("files");
+      var report = document.getElementById("report");
+      var urls = [];
+
+      function esc(t) { return String(t).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+
+      input.addEventListener("change", function () {
+        urls.forEach(URL.revokeObjectURL);
+        urls = [];
+        var files = Array.prototype.slice.call(input.files);
+        if (!files.length) { report.hidden = true; return; }
+
+        var problems = [], pages = [], seen = {};
+        files.forEach(function (f) {
+          var m = f.name.match(/^(\d+)\.(png|jpe?g|webp)$/i);
+          if (!m) { problems.push("“" + esc(f.name) + "” isn't named by page number (like 7.png)."); return; }
+          var n = parseInt(m[1], 10);
+          if (seen[n]) { problems.push("Page " + n + " is there twice (" + esc(seen[n].name) + " and " + esc(f.name) + ")."); return; }
+          seen[n] = f;
+          if (f.size > 10 * 1024 * 1024) problems.push("Page " + n + " is " + (f.size / 1048576).toFixed(1) + " MB; GitHub takes images up to 10 MB.");
+          pages.push({ n: n, f: f });
+        });
+        pages.sort(function (a, b) { return a.n - b.n; });
+
+        var max = pages.length ? pages[pages.length - 1].n : 0, missing = [];
+        for (var i = 1; i <= max; i++) if (!seen[i]) missing.push(i);
+        if (missing.length) problems.unshift("Missing page " + (missing.length > 1 ? "numbers " : "number ") + missing.join(", ") + ".");
+
+        var html = "";
+        pages.forEach(function (p) {
+          var u = URL.createObjectURL(p.f);
+          urls.push(u);
+          html += '<li><a><img src="' + u + '" alt="Page ' + p.n + '" data-n="' + p.n + '"><span>' + p.n + "</span></a></li>";
+        });
+        document.getElementById("preview").innerHTML = html;
+
+        // Note pages drawn in a very different shape (they still work).
+        var odd = [], pending = pages.length;
+        Array.prototype.forEach.call(document.querySelectorAll("#preview img"), function (im) {
+          im.onload = im.onerror = function () {
+            if (im.naturalWidth && Math.abs(im.naturalWidth / im.naturalHeight - 1.5) > 0.25) odd.push(+im.dataset.n);
+            if (--pending === 0 && odd.length) {
+              odd.sort(function (a, b) { return a - b; });
+              var li = document.createElement("li");
+              li.className = "note";
+              li.textContent = "Page" + (odd.length > 1 ? "s " : " ") + odd.join(", ") + (odd.length > 1 ? " aren't" : " isn't") +
+                " the usual 3:2 shape. That's fine; they'll keep their own shape.";
+              document.getElementById("problems").appendChild(li);
+            }
+          };
+        });
+
+        document.getElementById("problems").innerHTML = problems.map(function (t) { return "<li>" + t + "</li>"; }).join("");
+        var ok = !problems.length && pages.length;
+        var summary = document.getElementById("summary");
+        summary.className = "summary " + (ok ? "ok" : "warn");
+        summary.textContent = ok
+          ? pages.length + " page" + (pages.length > 1 ? "s" : "") + ", in order 1–" + max + ". Ready to send."
+          : pages.length + " page" + (pages.length === 1 ? "" : "s") + " found. Fix the problems below before sending.";
+        report.hidden = false;
+      });
+    })();
+  </script>
+</body>
+</html>

@@ -1,22 +1,28 @@
 """
-Make the web pages for Blackthorn Castle from the original page art.
+Make the web pages for one chapter of Blackthorn Castle from its page art.
 
-    python tools/make_pages.py "<folder with 1.png, 2.png, ...>"
+    python tools/make_pages.py <folder> --chapter 2 [--title "The Cellar"] [--by "Name"] [--cover]
 
-For each numbered page it trims any thin black sliver along the edges, brings
-the page to 1536 px wide (3:2 pages come out exactly 1536x1024; a page drawn
-in another shape keeps that shape) and writes three JPEGs:
+<folder> holds the chapter's pages named 1.png, 2.png, ... (png, jpg or webp)
+in reading order. For each page it trims any thin black sliver along the edges,
+brings the page to 1536 px wide (3:2 pages come out exactly 1536x1024; a page
+drawn in another shape keeps that shape) and writes three JPEGs:
 
-    pages/large/001.jpg   1536 wide  - the reader on desktop, and zoom
-    pages/small/001.jpg    960 wide  - the reader on phones
-    pages/thumb/001.jpg    360 wide  - the contents grid
+    chapters/2/large/001.jpg   1536 wide  - the reader on desktop, and zoom
+    chapters/2/small/001.jpg    960 wide  - the reader on phones
+    chapters/2/thumb/001.jpg    360 wide  - the contents grid
 
-It also writes assets/pages.js (page list with sizes), the cover picture, the
-share picture and the favicon. Needs Pillow and numpy.
+The chapter is then listed in chapters/chapters.json, and assets/comic.js (what
+the site reads) is written from that. Rebuilding a chapter replaces it.
+--cover also remakes the cover, share picture and favicon from page 1.
+
+Needs Pillow and numpy.
 """
 
+import argparse
 import json
 import re
+import shutil
 import sys
 from pathlib import Path
 
@@ -24,14 +30,18 @@ import numpy as np
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parent.parent
+CHAPTERS = ROOT / "chapters"
+INDEX = CHAPTERS / "chapters.json"
 WIDTH = 1536
 SIZES = {"large": (1536, 84), "small": (960, 80), "thumb": (360, 74)}
 MAX_SLIVER = 16
 
+Image.MAX_IMAGE_PIXELS = 80_000_000
+
 
 def numbered(src):
     found = []
-    for f in src.iterdir():
+    for f in Path(src).iterdir():
         m = re.fullmatch(r"(\d+)\.(png|jpe?g|webp)", f.name, re.I)
         if m:
             found.append((int(m.group(1)), f))
@@ -86,39 +96,54 @@ def save(img, path, quality):
     img.save(path, "JPEG", quality=quality, optimize=True, progressive=True)
 
 
-def main():
-    if len(sys.argv) != 2:
-        sys.exit(__doc__)
-    src = Path(sys.argv[1])
-    listed = numbered(src)
-    if not listed:
-        sys.exit(f"No numbered pages in {src}")
-    numbers = [n for n, _ in listed]
-    gaps = sorted(set(range(1, max(numbers) + 1)) - set(numbers))
-    if gaps:
-        sys.exit(f"Missing page numbers: {gaps}")
+def load_index():
+    if INDEX.exists():
+        return json.loads(INDEX.read_text(encoding="utf-8"))
+    return {"title": "Blackthorn Castle", "chapters": []}
 
-    pages = []
-    total = 0
-    for n, f in listed:
-        page, trimmed = clean(Image.open(f).convert("RGB"))
-        name = f"{n:03d}.jpg"
-        for folder, (w, q) in SIZES.items():
-            im = page if w == page.width else page.resize((w, round(w * page.height / page.width)), Image.LANCZOS)
-            save(im, ROOT / "pages" / folder / name, q)
-        kb = (ROOT / "pages" / "large" / name).stat().st_size // 1024
-        total += sum((ROOT / "pages" / d / name).stat().st_size for d in SIZES)
-        pages.append({"n": n, "w": page.width, "h": page.height})
-        note = f"  trimmed t{trimmed[0]} b{trimmed[1]} l{trimmed[2]} r{trimmed[3]}" if any(trimmed) else ""
-        print(f"page {n:>3}: {page.width}x{page.height}  {kb} KB{note}")
 
+def write_index(index):
+    index["chapters"].sort(key=lambda c: c["n"])
+    INDEX.parent.mkdir(exist_ok=True)
+    INDEX.write_text(json.dumps(index, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
     (ROOT / "assets").mkdir(exist_ok=True)
-    (ROOT / "assets" / "pages.js").write_text(
-        "window.COMIC = " + json.dumps({"title": "Blackthorn Castle", "chapter": "Chapter 1", "pages": pages}) + ";\n",
+    (ROOT / "assets" / "comic.js").write_text(
+        "window.COMIC = " + json.dumps(index, ensure_ascii=False, separators=(",", ":")) + ";\n",
         encoding="utf-8",
     )
 
-    first, _ = clean(Image.open(listed[0][1]).convert("RGB"))
+
+def build_chapter(n, images, title="", by="", log=print):
+    """Build chapter n from page images given in reading order.
+
+    images: paths or open PIL images. Returns the chapter's index entry.
+    """
+    out = CHAPTERS / str(n)
+    if out.exists():
+        shutil.rmtree(out)
+
+    pages = []
+    for i, src in enumerate(images, 1):
+        im = src if isinstance(src, Image.Image) else Image.open(src)
+        page, trimmed = clean(im.convert("RGB"))
+        name = f"{i:03d}.jpg"
+        for folder, (w, q) in SIZES.items():
+            sized = page if w == page.width else page.resize((w, round(w * page.height / page.width)), Image.LANCZOS)
+            save(sized, out / folder / name, q)
+        pages.append({"w": page.width, "h": page.height})
+        kb = (out / "large" / name).stat().st_size // 1024
+        note = f"  trimmed t{trimmed[0]} b{trimmed[1]} l{trimmed[2]} r{trimmed[3]}" if any(trimmed) else ""
+        log(f"page {i:>3}: {page.width}x{page.height}  {kb} KB{note}")
+
+    entry = {"n": n, "title": title.strip(), "by": by.strip(), "pages": pages}
+    index = load_index()
+    index["chapters"] = [c for c in index["chapters"] if c["n"] != n] + [entry]
+    write_index(index)
+    return entry
+
+
+def make_cover(page_one):
+    first, _ = clean(Image.open(page_one).convert("RGB"))
     w, h = first.size
     # The cover is page 1 without its page tag (top-left corner).
     cover = first.crop((round(w * 0.07), 0, w, h))
@@ -131,7 +156,28 @@ def main():
     icon = first.crop(((w - s) // 2, round(h * 0.08), (w - s) // 2 + s, round(h * 0.08) + s))
     icon.resize((180, 180), Image.LANCZOS).save(ROOT / "assets" / "icon.png", optimize=True)
 
-    print(f"{len(pages)} pages, {total // 1024 // 1024} MB in pages/")
+
+def main():
+    ap = argparse.ArgumentParser(description="Make one chapter's web pages.")
+    ap.add_argument("folder", help="folder with 1.png, 2.png, ...")
+    ap.add_argument("--chapter", type=int, required=True)
+    ap.add_argument("--title", default="", help="chapter title, e.g. The Cellar")
+    ap.add_argument("--by", default="", help="credit shown with the chapter")
+    ap.add_argument("--cover", action="store_true", help="also remake the cover from page 1")
+    args = ap.parse_args()
+
+    listed = numbered(args.folder)
+    if not listed:
+        sys.exit(f"No numbered pages in {args.folder}")
+    numbers = [n for n, _ in listed]
+    gaps = sorted(set(range(1, max(numbers) + 1)) - set(numbers))
+    if gaps:
+        sys.exit(f"Missing page numbers: {gaps}")
+
+    entry = build_chapter(args.chapter, [f for _, f in listed], args.title, args.by)
+    if args.cover:
+        make_cover(listed[0][1])
+    print(f"Chapter {args.chapter}: {len(entry['pages'])} pages")
 
 
 if __name__ == "__main__":

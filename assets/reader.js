@@ -2,90 +2,146 @@
   "use strict";
 
   var COMIC = window.COMIC;
-  var pages = COMIC.pages;
-  var total = pages.length;
-  var END = total + 1; // the "End of Chapter" screen sits after the last page
+  var chapters = COMIC.chapters;
+  var many = chapters.length > 1;
+
+  // Every place the reader can be, in order: each chapter's pages, then that
+  // chapter's "End of Chapter" screen.
+  var stops = [];
+  chapters.forEach(function (ch) {
+    ch.pages.forEach(function (pg, i) { stops.push({ ch: ch, p: i + 1, w: pg.w, h: pg.h }); });
+    stops.push({ ch: ch, end: true });
+  });
 
   var $ = function (id) { return document.getElementById(id); };
   var stage = $("stage"), img = $("page"), end = $("end");
   var prevBtn = $("prev"), nextBtn = $("next"), sidePrev = $("sidePrev"), sideNext = $("sideNext");
-  var jump = $("jump"), progress = $("progress");
+  var jump = $("jump"), progress = $("progress"), chapterLabel = $("chapterLabel");
   var zoom = $("zoom"), zoomImg = $("zoomImg");
 
-  var current = 0;
+  var current = -1;
   var cache = {};
 
   function nn(n) { return String(n).padStart(3, "0"); }
-  function src(n, size) { return "pages/" + size + "/" + nn(n) + ".jpg"; }
+  function src(s, size) { return "chapters/" + s.ch.n + "/" + size + "/" + nn(s.p) + ".jpg"; }
+  function chapterName(ch) { return "Chapter " + ch.n; }
 
-  // Phones and small windows get the 960 px page; bigger screens the full one.
-  function size() {
-    var p = pages[0];
-    var w = Math.min(stage.clientWidth, stage.clientHeight * (p.w / p.h));
-    return w * (window.devicePixelRatio || 1) > 1000 ? "large" : "small";
+  // Chapter 1 keeps its short links (#12); later chapters are #2/5.
+  function hashFor(s) {
+    if (s.end) return s.ch.n === 1 ? "#end" : "#" + s.ch.n + "/end";
+    return s.ch.n === 1 ? "#" + s.p : "#" + s.ch.n + "/" + s.p;
   }
 
-  function preload(n) {
-    if (n < 1 || n > total) return;
-    var s = src(n, size());
-    if (cache[s]) return;
-    var im = new Image();
-    im.decoding = "async";
-    im.src = s;
-    cache[s] = im;
+  function find(c, p) {
+    for (var i = 0; i < stops.length; i++) {
+      var s = stops[i];
+      if (s.ch.n !== c) continue;
+      if (p === "end" ? s.end : s.p === p) return i;
+    }
+    return -1;
   }
 
   function parse() {
     var h = location.hash.replace(/^#\/?/, "").toLowerCase();
-    if (h === "end") return END;
-    var n = parseInt(h, 10);
-    return n >= 1 && n <= total ? n : 1;
+    var m = h.match(/^(\d+)\/(\d+|end)$/);
+    var i = -1;
+    if (m) i = find(parseInt(m[1], 10), m[2] === "end" ? "end" : parseInt(m[2], 10));
+    else if (h === "end") i = find(1, "end");
+    else if (/^\d+$/.test(h)) i = find(1, parseInt(h, 10));
+    return i < 0 ? 0 : i;
   }
 
-  function show(n) {
-    n = Math.max(1, Math.min(END, n));
-    if (n === current) return;
-    current = n;
+  // Phones and small windows get the 960 px page; bigger screens the full one.
+  function size() {
+    var w = Math.min(stage.clientWidth, stage.clientHeight * 1.5);
+    return w * (window.devicePixelRatio || 1) > 1000 ? "large" : "small";
+  }
 
-    var hash = "#" + (n === END ? "end" : n);
+  function preload(i) {
+    var s = stops[i];
+    if (!s || s.end) return;
+    var u = src(s, size());
+    if (cache[u]) return;
+    var im = new Image();
+    im.decoding = "async";
+    im.src = u;
+    cache[u] = im;
+  }
+
+  function text(el, t) { el.textContent = t; }
+
+  function showEnd(s) {
+    var i = chapters.indexOf(s.ch), next = chapters[i + 1];
+    text($("endKicker"), COMIC.title + (s.ch.title ? " · " + s.ch.title : ""));
+    text($("endTitle"), "End of " + chapterName(s.ch));
+    text($("endBy"), s.ch.by ? "Pages by " + s.ch.by : "");
+    $("endBy").hidden = !s.ch.by;
+    var primary = $("endPrimary");
+    if (next) {
+      primary.href = hashFor(stops[find(next.n, 1)]);
+      text(primary, "Start " + chapterName(next));
+    } else {
+      primary.href = "#1";
+      text(primary, "Read from the start");
+    }
+    document.title = "End of " + chapterName(s.ch) + " · " + COMIC.title;
+  }
+
+  function show(i) {
+    i = Math.max(0, Math.min(stops.length - 1, i));
+    if (i === current) return;
+    current = i;
+    var s = stops[i];
+
+    var hash = hashFor(s);
     if (location.hash !== hash) history.replaceState(null, "", hash);
 
-    var atEnd = n === END;
-    end.hidden = !atEnd;
-    img.hidden = atEnd;
-    prevBtn.disabled = sidePrev.disabled = n === 1;
-    nextBtn.disabled = sideNext.disabled = atEnd;
-    progress.style.width = (Math.min(n, total) / total) * 100 + "%";
-    jump.value = atEnd ? String(total) : String(n);
+    end.hidden = !s.end;
+    img.hidden = !!s.end;
+    prevBtn.disabled = sidePrev.disabled = i === 0;
+    nextBtn.disabled = sideNext.disabled = i === stops.length - 1;
+    var count = s.ch.pages.length;
+    progress.style.width = (s.end ? 1 : s.p / count) * 100 + "%";
+    jump.value = String(s.end ? i - 1 : i);
+    text(chapterLabel, chapterName(s.ch) + (s.ch.title ? " · " + s.ch.title : ""));
+    try { localStorage.setItem("bc-at", hash); } catch (e) {}
 
-    if (atEnd) {
-      document.title = "End of Chapter 1 · Blackthorn Castle";
+    if (s.end) {
+      img.removeAttribute("src"); // so the last page doesn't flash before the next chapter's first
+      showEnd(s);
+      preload(i + 1);
       return;
     }
 
-    var p = pages[n - 1];
-    var s = src(n, size());
-    img.width = p.w;
-    img.height = p.h;
-    img.alt = "Blackthorn Castle, Chapter 1, page " + n;
-    if (img.getAttribute("src") !== s) {
+    var u = src(s, size());
+    img.width = s.w;
+    img.height = s.h;
+    img.alt = COMIC.title + ", " + chapterName(s.ch) + ", page " + s.p;
+    if (img.getAttribute("src") !== u) {
       img.classList.add("loading");
       img.onload = img.onerror = function () { img.classList.remove("loading"); };
-      img.src = s;
+      img.src = u;
     }
-    document.title = "Page " + n + " · Blackthorn Castle";
-    try { localStorage.setItem("bc-page", String(n)); } catch (e) {}
+    document.title = (many ? chapterName(s.ch) + ", page " : "Page ") + s.p + " · " + COMIC.title;
 
-    preload(n + 1);
-    preload(n + 2);
-    preload(n - 1);
+    preload(i + 1);
+    preload(i + 2);
+    preload(i - 1);
   }
 
   function go(d) { if (zoom.hidden) show(current + d); }
 
-  // Page menu
+  // Page menu, grouped by chapter when there is more than one.
   var opts = "";
-  for (var i = 1; i <= total; i++) opts += '<option value="' + i + '">' + i + " / " + total + "</option>";
+  chapters.forEach(function (ch) {
+    var count = ch.pages.length;
+    if (many) opts += '<optgroup label="' + chapterName(ch) + '">';
+    stops.forEach(function (s, i) {
+      if (s.ch !== ch || s.end) return;
+      opts += '<option value="' + i + '">' + (many ? "Ch " + ch.n + " · " : "") + s.p + " / " + count + "</option>";
+    });
+    if (many) opts += "</optgroup>";
+  });
   jump.innerHTML = opts;
   jump.addEventListener("change", function () { show(parseInt(jump.value, 10)); jump.blur(); });
 
@@ -106,8 +162,8 @@
     switch (e.key) {
       case "ArrowRight": case "PageDown": case "d": go(1); break;
       case "ArrowLeft": case "PageUp": case "a": go(-1); break;
-      case "Home": show(1); break;
-      case "End": show(total); break;
+      case "Home": show(0); break;
+      case "End": show(stops.length - 2); break;
       default: return;
     }
     e.preventDefault();
@@ -137,12 +193,12 @@
   // Zoom: tap the page to see it large; tap again (or Esc) to close.
   function openZoom(e) {
     if (Date.now() - swiped < 400) return;
+    var s = stops[current];
     var r = img.getBoundingClientRect();
-    var p = pages[current - 1];
     var vw = window.innerWidth, vh = window.innerHeight;
-    var w = Math.round(Math.max(vw, Math.min(r.width * 2.2, p.w * 1.4)));
-    var h = Math.round(w * p.h / p.w);
-    zoomImg.src = src(current, "large");
+    var w = Math.round(Math.max(vw, Math.min(r.width * 2.2, s.w * 1.4)));
+    var h = Math.round(w * s.h / s.w);
+    zoomImg.src = src(s, "large");
     zoomImg.alt = img.alt;
     zoomImg.style.width = w + "px";
     zoomImg.style.height = h + "px";

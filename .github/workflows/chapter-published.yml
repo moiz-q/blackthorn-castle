@@ -1,0 +1,31 @@
+# When the owner merges a chapter's pull request, tell the person who sent it
+# that it's live, and close their issue.
+
+name: Chapter published
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  issues: write
+  pages: write
+
+jobs:
+  announce:
+    if: github.event.pull_request.merged && startsWith(github.event.pull_request.head.ref, 'chapter-')
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      BRANCH: ${{ github.event.pull_request.head.ref }}
+    steps:
+      - run: |
+          chapter=$(echo "$BRANCH" | sed -nE 's/^chapter-([0-9]+)-issue-([0-9]+)$/\1/p')
+          issue=$(echo "$BRANCH" | sed -nE 's/^chapter-([0-9]+)-issue-([0-9]+)$/\2/p')
+          [ -n "$issue" ] || exit 0
+          gh api -X POST "repos/$REPO/pages/builds" > /dev/null || true
+          site=$(gh api "repos/$REPO/pages" --jq .html_url)
+          if [ "$chapter" = 1 ]; then link="${site}read.html#1"; else link="${site}read.html#$chapter/1"; fi
+          gh issue comment "$issue" --repo "$REPO" --body "**Chapter $chapter is approved and published.** It will be live in a minute or two: $link"
+          gh issue close "$issue" --repo "$REPO" --reason completed

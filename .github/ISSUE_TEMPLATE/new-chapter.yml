@@ -1,0 +1,39 @@
+name: New chapter
+description: Send the pages for a new chapter of Blackthorn Castle. They're built into the comic for you.
+title: "New chapter"
+labels: ["new chapter"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Drop your pages in below and they're turned into the comic for you: same size and clean edges as the rest.
+        In a few minutes a reply shows every page, numbered, exactly as it will appear. If something's off, edit this post and it's rebuilt.
+  - type: input
+    id: chapter
+    attributes:
+      label: Chapter number
+      description: Usually the next one after the last chapter on the site.
+      placeholder: "2"
+    validations:
+      required: true
+  - type: input
+    id: title
+    attributes:
+      label: Chapter title
+      description: Optional. Shown on the cover next to the chapter number.
+      placeholder: "The Cellar"
+  - type: input
+    id: by
+    attributes:
+      label: Credit
+      description: Optional. Shown with the chapter as "Pages by …".
+      placeholder: "Your name"
+  - type: textarea
+    id: pages
+    attributes:
+      label: Pages
+      description: >
+        Drag your page images in here in page order, 1 first, then 2, and so on (PNG, JPG or WebP, up to 10 MB each).
+        A .zip of pages named 1.png, 2.png … also works (up to 25 MB), and keeps the order by name.
+    validations:
+      required: true
