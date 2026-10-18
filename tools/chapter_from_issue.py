@@ -5,7 +5,8 @@ Reads the issue form from the ISSUE_BODY environment variable, downloads the
 page images (or a .zip of numbered pages) attached to it, and builds the
 chapter with make_pages.build_chapter. Writes a reply for the issue to
 $RUNNER_TEMP/reply.md ({SHA} is filled in once the pages are committed) and
-sets these step outputs: ok, chapter, pages, title.
+sets these step outputs: ok, chapter, pages, hold (the "hold for review"
+box was ticked).
 
 Who may replace a chapter that is already up: AUTHOR_ROLE is the issue
 author's association with the repository (OWNER, MEMBER, COLLABORATOR, ...).
@@ -211,8 +212,9 @@ def main():
         output(ok="false")
         return
 
+    hold = bool(re.search(r"^\s*-\s*\[[xX]\]", form.get("review", ""), re.M))
     reply.write_text(reply_ok(n, len(entry["pages"]), repo), encoding="utf-8")
-    output(ok="true", chapter=n, pages=len(entry["pages"]))
+    output(ok="true", chapter=n, pages=len(entry["pages"]), hold=str(hold).lower())
 
 
 if __name__ == "__main__":

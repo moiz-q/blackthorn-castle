@@ -78,7 +78,7 @@ jobs:
           sed -i "s/{SHA}/$(git rev-parse HEAD)/g" "$RUNNER_TEMP/reply.md"
 
       - name: Publish (owner and collaborators)
-        if: steps.build.outputs.ok == 'true' && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association)
+        if: steps.build.outputs.ok == 'true' && steps.build.outputs.hold != 'true' && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association)
         env:
           CHAPTER: ${{ steps.build.outputs.chapter }}
           PR: ${{ steps.pr.outputs.url }}
@@ -91,10 +91,15 @@ jobs:
           gh issue comment "$ISSUE" --repo "$REPO" --body-file "$RUNNER_TEMP/reply.md"
           gh issue close "$ISSUE" --repo "$REPO" --reason completed
 
-      - name: Ask for approval (everyone else)
-        if: steps.build.outputs.ok == 'true' && !contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association)
+      - name: Wait for approval (everyone else, or held for review)
+        if: steps.build.outputs.ok == 'true' && (steps.build.outputs.hold == 'true' || !contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association))
         env:
           PR: ${{ steps.pr.outputs.url }}
+          TRUSTED: ${{ contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association) }}
         run: |
-          printf '\nIt goes live once the comic'"'"'s owner approves it: %s\n' "$PR" >> "$RUNNER_TEMP/reply.md"
+          if [ "$TRUSTED" = true ]; then
+            printf '\nHeld for review, as asked. Merge the pull request to publish it: %s\n' "$PR" >> "$RUNNER_TEMP/reply.md"
+          else
+            printf '\nIt goes live once the comic'"'"'s owner approves it: %s\n' "$PR" >> "$RUNNER_TEMP/reply.md"
+          fi
           gh issue comment "$ISSUE" --repo "$REPO" --body-file "$RUNNER_TEMP/reply.md"

@@ -37,3 +37,10 @@ body:
         A .zip of pages named 1.png, 2.png … also works (up to 25 MB), and keeps the order by name.
     validations:
       required: true
+  - type: checkboxes
+    id: hold
+    attributes:
+      label: Review
+      description: The comic's owner and collaborators publish straight away. Tick this to look it over first.
+      options:
+        - label: Hold this chapter for review instead of publishing it straight away
